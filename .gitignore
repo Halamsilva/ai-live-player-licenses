@@ -3,3 +3,6 @@ keys/private.pem
 senha.txt
 data/licenses.json
 .env
+glogin.log
+glogin_err.log
+ghlogin.bat
