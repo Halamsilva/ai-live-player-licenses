@@ -1,0 +1,12 @@
+{
+  "name": "ai-live-player-licenses",
+  "version": "1.0.0",
+  "description": "Painel de licenças AI Live Player",
+  "main": "server.cjs",
+  "scripts": {
+    "start": "node server.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

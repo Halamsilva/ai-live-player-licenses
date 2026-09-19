@@ -1,0 +1,115 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>Painel de Licenças</title><style>
+*{box-sizing:border-box}body{margin:0;background:#0b1420;color:#e8f0f7;font:15px 'Segoe UI',Arial,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px}
+main{width:100%;max-width:860px;background:#0e1a28;border:1px solid #1c3044;border-radius:14px;padding:26px}h1{margin:0 0 4px;font-size:22px}h1 span{color:#59ff52}p.sub{margin:0 0 20px;color:#7d94a8;font-size:13px}
+label{display:block;margin:12px 0 4px;font-size:13px;color:#b8cbd9}input{width:100%;padding:10px 12px;color:#e8f0f7;background:#08121c;border:1px solid #24405c;border-radius:8px;font-size:14px;outline:none}input:focus{border-color:#27c93f}
+.row{display:flex;gap:12px}.row>div{flex:1}
+.days-presets{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.preset{flex:1;min-width:72px;padding:10px 6px;border:1px solid #24405c;border-radius:8px;background:#08121c;color:#b8cbd9;cursor:pointer;font-weight:700;text-align:center}.preset.active{border-color:#27c93f;color:#27c93f;background:#0d2a18}
+button.btn{width:100%;margin-top:18px;padding:13px;border:0;border-radius:9px;background:linear-gradient(135deg,#1ea94f,#147a3c);color:#fff;font-weight:800;font-size:15px;cursor:pointer}
+button.btn:hover{filter:brightness(1.15)}
+#loginBox button.btn{background:linear-gradient(135deg,#1b3550,#12283c)}
+.ok{color:#59ff52;margin:12px 0 0;font-weight:700}.err{color:#ff7b8a;margin:12px 0 0;font-weight:700}
+textarea#output{width:100%;min-height:90px;margin-top:12px;padding:10px;background:#08121c;border:1px solid #24405c;border-radius:8px;color:#e8f0f7;font:12px Consolas,monospace;resize:vertical}
+.copy-btn{margin-top:8px;width:auto;padding:8px 14px;background:#185b32;color:#fff;border:0;border-radius:8px;cursor:pointer;font-weight:700}
+table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}th,td{border:1px solid #1c3044;padding:7px 9px;text-align:left}th{background:#132a3e;color:#b8cbd9}td{color:#96b39d;word-break:break-all}
+.del{background:#7d2b87;color:#fff;border:0;border-radius:6px;padding:4px 10px;cursor:pointer}
+#app{display:none}#loginBox{display:block}
+</style></head><body>
+<div id="loginBox"><main style="max-width:380px">
+  <h1>Painel de Licenças</h1>
+  <p class="sub">Entre com a senha de administrador para gerar chaves.</p>
+  <input id="loginPass" type="password" placeholder="Senha">
+  <button class="btn" onclick="doLogin()">Entrar</button>
+  <p id="loginErr" class="err"></p>
+</main></div>
+<div id="app"><main>
+  <h1>AI Live Player <span>// Painel de Licenças</span></h1>
+  <p class="sub">Gere a chave de acesso do aluno. O código do computador (HWID) é mostrado na tela de ativação do programa. Clique em "Copiar chave" e envie para o aluno.</p>
+  <div class="row">
+    <div><label>E-mail do aluno</label><input id="email" type="email" placeholder="aluno@email.com"></div>
+    <div><label>Nome do aluno</label><input id="name" type="text" placeholder="Maria Silva"></div>
+  </div>
+  <div class="row">
+    <div><label>Código do computador (HWID)</label><input id="hwid" type="text" placeholder="Ex: 4F1A-9C2B-7D34-8E56"></div>
+    <div><label>Validade</label>
+      <div class="days-presets" id="presets">
+        <button class="preset" data-days="7">7 dias</button>
+        <button class="preset" data-days="15">15 dias</button>
+        <button class="preset active" data-days="30">30 dias</button>
+        <button class="preset" data-days="60">60 dias</button>
+        <button class="preset" data-days="90">90 dias</button>
+        <button class="preset" data-days="0">Personalizado</button>
+      </div>
+    </div>
+  </div>
+  <label>Ou digite personalizado (dias)</label>
+  <input id="customDays" type="number" min="1" placeholder="Ex: 45">
+  <button class="btn" onclick="doGenerate()">Gerar chave de acesso</button>
+  <textarea id="output" placeholder="A chave gerada aparece aqui..." readonly></textarea>
+  <button class="copy-btn" onclick="copyKey()">Copiar chave</button>
+  <p id="genMsg" class="ok"></p>
+  <h2 style="margin-top:26px;font-size:17px">Chaves geradas</h2>
+  <table id="tbl"><thead><tr><th>Nome</th><th>E-mail</th><th>HWID</th><th>Dias</th><th>Expira</th><th>Ação</th></tr></thead></table>
+</main></div>
+<script>
+var token = localStorage.getItem('lk') || '';
+async function api(path, body, method) {
+  var r = await fetch('/api/' + path, {
+    method: method || 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return r.json();
+}
+async function doLogin() {
+  var r = await api('login', { password: document.getElementById('loginPass').value });
+  if (r.ok) { token = r.token; localStorage.setItem('lk', token); showApp(); }
+  else document.getElementById('loginErr').textContent = r.error;
+}
+var selectedDays = 30;
+document.querySelectorAll('.preset').forEach(function (b) {
+  b.onclick = function () {
+    document.querySelectorAll('.preset').forEach(function (x) { x.classList.remove('active'); });
+    b.classList.add('active');
+    selectedDays = parseInt(b.dataset.days, 10);
+  };
+});
+async function doGenerate() {
+  var days = selectedDays === 0 ? parseInt(document.getElementById('customDays').value || '0', 10) : selectedDays;
+  if (!days || days < 1) { document.getElementById('genMsg').className = 'err'; document.getElementById('genMsg').textContent = 'Escolha a validade (dias).'; return; }
+  var r = await api('generate', { email: document.getElementById('email').value, name: document.getElementById('name').value, hwid: document.getElementById('hwid').value, days: days });
+  if (r.ok) {
+    document.getElementById('output').value = r.key;
+    document.getElementById('genMsg').className = 'ok';
+    document.getElementById('genMsg').textContent = 'Chave gerada com sucesso!';
+    loadList();
+  } else {
+    document.getElementById('genMsg').className = 'err';
+    document.getElementById('genMsg').textContent = r.error;
+  }
+}
+function copyKey() { var v = document.getElementById('output').value; if (v) { navigator.clipboard.writeText(v); } }
+async function loadList() {
+  var r = await api('list', null, 'GET');
+  var tb = document.getElementById('tbl');
+  tb.innerHTML = '<thead><tr><th>Nome</th><th>E-mail</th><th>HWID</th><th>Dias</th><th>Expira</th><th>Ação</th></tr></thead>';
+  if (!r.ok) return;
+  r.licenses.forEach(function (l) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + esc(l.name) + '</td><td>' + esc(l.email) + '</td><td>' + esc(l.hwid) + '</td><td>' + l.days + '</td><td>' + new Date(l.exp).toLocaleDateString('pt-BR') + '</td><td><button class="del" onclick="delKey(\'' + esc(l.key) + '\')">remover</button></td>';
+    tb.appendChild(tr);
+  });
+}
+function delKey(key) {
+  api('delete', { key: key }).then(loadList);
+}
+function esc(s) { return String(s || '').replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function showApp() {
+  document.getElementById('loginBox').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadList();
+}
+async function init() {
+  try { var r = await api('list', null, 'GET'); if (r.ok) showApp(); } catch (e) {}
+}
+init();
+</script></body></html>
