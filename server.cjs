@@ -34,30 +34,44 @@ let licenses = [];
 let privKey = null;
 let pubKey = null;
 
+function parseDb(raw) {
+  if (raw === null || raw === undefined || raw === 'nil') return [];
+  let value = raw;
+  if (typeof value === 'string') {
+    try { value = JSON.parse(value); } catch (e) { return []; }
+  }
+  // Formato legado gravado como { data: "<json>" }
+  if (value && !Array.isArray(value) && typeof value.data !== 'undefined') {
+    value = value.data;
+    if (typeof value === 'string') {
+      try { value = JSON.parse(value); } catch (e) { return []; }
+    }
+  }
+  return Array.isArray(value) ? value : [];
+}
+
 async function loadDb() {
   if (REDIS_URL && REDIS_TOKEN) {
     try {
       const res = await fetch(REDIS_URL + '/get/' + REDIS_KEY, { headers: { Authorization: 'Bearer ' + REDIS_TOKEN } });
       const data = await res.json();
-      if (data && data.result && data.result !== 'nil') {
-        licenses = JSON.parse(data.result);
-        return;
-      }
-    } catch (e) {}
-    licenses = [];
+      licenses = parseDb(data ? data.result : null);
+    } catch (e) {
+      licenses = [];
+    }
     return;
   }
-  try { licenses = JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); }
+  try { licenses = parseDb(fs.readFileSync(DB_PATH, 'utf8')); }
   catch (e) { licenses = []; }
 }
 async function saveDb() {
+  if (!Array.isArray(licenses)) licenses = [];
   if (REDIS_URL && REDIS_TOKEN) {
     try {
-      const body = JSON.stringify({ data: JSON.stringify(licenses) });
       await fetch(REDIS_URL + '/set/' + REDIS_KEY, {
         method: 'POST',
-        headers: { Authorization: 'Bearer ' + REDIS_TOKEN, 'Content-Type': 'application/json' },
-        body
+        headers: { Authorization: 'Bearer ' + REDIS_TOKEN, 'Content-Type': 'text/plain' },
+        body: JSON.stringify(licenses)
       });
     } catch (e) {}
     return;
@@ -83,6 +97,7 @@ function normalizeHwid(raw) {
 }
 
 async function generateKey(email, name, days, hwid) {
+  if (!Array.isArray(licenses)) licenses = [];
   const exp = Date.now() + days * 86400000;
   const license = { v: 1, email: (email || '').trim(), name: (name || '').trim(), hwid: normalizeHwid(hwid), days: Number(days) || 30, exp };
   const key = signLicense(license);
