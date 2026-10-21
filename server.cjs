@@ -29,7 +29,6 @@ function loadPublicKey() {
   return fs.readFileSync(PUBLIC_KEY_PATH);
 }
 
-let SESSION = '';
 let licenses = [];
 let privKey = null;
 let pubKey = null;
@@ -79,8 +78,27 @@ async function saveDb() {
   fs.writeFileSync(DB_PATH, JSON.stringify(licenses, null, 2));
 }
 
+const TOKEN_TTL = 7 * 86400000;
+function sessionSecret() {
+  return crypto.createHash('sha256').update('ai-live-player|' + ADMIN_PASSWORD + '|' + (process.env.LICENSE_PRIVATE_KEY || 'local')).digest();
+}
+function hmac(payload) {
+  return crypto.createHmac('sha256', sessionSecret()).update(payload).digest('hex');
+}
 function createToken() {
-  SESSION = crypto.randomBytes(32).toString('hex');
+  const payload = String(Date.now() + TOKEN_TTL);
+  return payload + '.' + hmac(payload);
+}
+function verifyToken(token) {
+  if (!token) return false;
+  const i = token.indexOf('.');
+  if (i < 0) return false;
+  const payload = token.slice(0, i);
+  const sig = token.slice(i + 1);
+  const expected = hmac(payload);
+  if (sig.length !== expected.length) return false;
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return false;
+  return Number(payload) > Date.now();
 }
 
 function b64u(buf) {
@@ -135,8 +153,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       if (!ADMIN_PASSWORD) { sendJson(res, 500, { ok: false, error: 'ADMIN_PASSWORD não definida.' }); return; }
       if (String(body.password || '') === ADMIN_PASSWORD) {
-        createToken();
-        sendJson(res, 200, { ok: true, token: SESSION });
+        sendJson(res, 200, { ok: true, token: createToken() });
       } else {
         sendJson(res, 401, { ok: false, error: 'Senha incorreta' });
       }
@@ -144,7 +161,8 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const isAuthed = !!SESSION && req.headers.authorization === 'Bearer ' + SESSION;
+  const authHeader = req.headers.authorization || '';
+  const isAuthed = authHeader.startsWith('Bearer ') && verifyToken(authHeader.slice(7).trim());
 
   if (req.method === 'POST' && p === '/api/generate') {
     if (!isAuthed) { sendJson(res, 401, { ok: false, error: 'Não autenticado' }); return; }

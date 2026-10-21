@@ -58,7 +58,19 @@ async function api(path, body, method) {
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
     body: body ? JSON.stringify(body) : undefined
   });
-  return r.json();
+  var data = await r.json();
+  if (r.status === 401 && path !== 'login') {
+    var hadToken = !!token;
+    token = '';
+    localStorage.removeItem('lk');
+    showLogin(hadToken ? 'Sessão expirada. Entre novamente.' : '');
+  }
+  return data;
+}
+function showLogin(msg) {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginBox').style.display = 'block';
+  document.getElementById('loginErr').textContent = msg || '';
 }
 async function doLogin() {
   var r = await api('login', { password: document.getElementById('loginPass').value });
